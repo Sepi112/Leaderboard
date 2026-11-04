@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GeoGuessr Tournament Leaderboard</title>
+<style>
+:root{--bg:#0b0d16;--card:#141829;--line:rgba(255,255,255,.08);--tx:#eef1f8;--mut:#8b93a7;--gold:#ffcc33}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:'Segoe UI',system-ui,sans-serif}
+main{max-width:760px;margin:0 auto;padding:24px 16px 60px}
+h1{margin:0 0 4px;font-size:28px;letter-spacing:2px;text-transform:uppercase;background:linear-gradient(90deg,#ffd35a,#ff8a3d);-webkit-background-clip:text;background-clip:text;color:transparent}
+.sub{color:var(--mut);font-size:14px;margin-bottom:18px}
+.bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.tabs{display:flex;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.tabs button{background:var(--card);color:var(--mut);border:0;padding:10px 18px;font:inherit;font-weight:700;cursor:pointer}
+.tabs button.on{background:#2a2f55;color:#fff}
+input{flex:1;min-width:160px;background:var(--card);color:var(--tx);border:1px solid var(--line);border-radius:12px;padding:10px 14px;font:inherit}
+#msg{padding:14px;border-radius:12px;background:var(--card);border:1px solid var(--line);color:var(--mut);margin-bottom:14px}
+#bounty{display:none;margin-bottom:14px;padding:14px 16px;border-radius:14px;border:1px solid #ff5a5a;background:linear-gradient(90deg,rgba(120,20,20,.5),var(--card))}
+#bounty b{color:#ff8a8a;letter-spacing:1.5px;text-transform:uppercase;font-size:12px;display:block}
+#bounty span{font-size:20px;font-weight:800}
+#bounty small{display:block;color:var(--mut);margin-top:3px}
+.row{display:flex;align-items:center;gap:12px;padding:10px 14px;margin-bottom:6px;border-radius:14px;background:var(--card);border:1px solid var(--line);border-left:4px solid #3b4268}
+.row.r1{border-left-color:#ffcc33}.row.r2{border-left-color:#c9d1d9}.row.r3{border-left-color:#d08a4e}
+.rk{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-weight:800;background:#2a2f45;flex:none}
+.r1 .rk{background:#ffcc33;color:#3a2a00}.r2 .rk{background:#c9d1d9;color:#222}.r3 .rk{background:#d08a4e;color:#2d1600}
+.nm{flex:1;min-width:0}
+.name{font-weight:600;font-size:18px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tier{font-size:11px;font-weight:800;letter-spacing:1.6px;text-transform:uppercase}
+.t1{color:#7fd6a0}.t2{color:#9aa4b2}.t3{color:#d08a4e}.t4{color:#dfe6ee}.t5{color:#ffcc33}.t6{color:#c58bff}.t7{color:#ff8a5a}
+.val{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;text-align:right}
+.mv{font-size:13px;font-weight:800;min-width:34px;text-align:right}
+.up{color:#5dff9a}.down{color:#ff6b6b}.new{color:#7cc4ff}
+details{margin-top:28px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 16px}
+summary{cursor:pointer;font-weight:700}
+details li,details p{color:#c6cce0;line-height:1.5;font-size:15px}
+.foot{color:var(--mut);font-size:12px;margin-top:14px}
+@media(max-width:480px){.name{font-size:16px}.val{font-size:18px}}
+</style></head><body><main>
+<h1>Leaderboard</h1>
+<div class="sub" id="upd">Loading…</div>
+<div id="bounty"></div>
+<div class="bar">
+  <div class="tabs"><button id="tR" class="on">Rating</button><button id="tP">Points</button></div>
+  <input id="s" type="search" placeholder="Search player…" autocomplete="off">
+</div>
+<div id="msg" style="display:none"></div>
+<div id="list"></div>
+<details><summary>How rating works</summary>
+<p><b>Placement rewards</b> (rating / points): 1st 100 / 500, 2nd 60 / 250, 3rd and 4th 30 / 100, 5th to 8th 20 / 50, 9th to 16th 10 / 25.</p>
+<ul>
+<li><b>Rating never goes down.</b> It only grows, so playing is always worth it.</li>
+<li><b>Upset bonus:</b> win a match against a higher-rated player (rating at the start of the tournament) and earn extra rating: +5 for a 100+ gap, +10 for 200+, +15 for 300+. Max +30 per tournament.</li>
+<li><b>Attendance bonus:</b> +5 rating for your 3rd and your 5th tournament in a week (Mon to Sun).</li>
+<li><b>Most Wanted:</b> beat the bounty holder to claim the bounty.</li>
+<li><b>Tiers:</b> Rookie, Iron 60, Bronze 150, Silver 300, Gold 500, then Master (top 10%) and Champion (top 2%).</li>
+</ul></details>
+<div class="foot">Updates automatically after every tournament.</div>
+</main>
+<script>
+const q = new URLSearchParams(location.search);
+const SRC = q.get('data') || 'leaderboard.json';
+let KEY = 'rating', data = null;
+const $ = id => document.getElementById(id);
+function el(t, c, x){ const e = document.createElement(t); if (c) e.className = c; if (x != null) e.textContent = x; return e; }
+function msg(t){ const m = $('msg'); m.textContent = t || ''; m.style.display = t ? '' : 'none'; }
+function render(){
+  const list = $('list'); list.textContent = '';
+  if (!data) return;
+  const K = KEY, PK = K === 'rating' ? 'pr' : 'pp';
+  const all = [...data.players].sort((a, b) => b[K] - a[K] || a.name.localeCompare(b.name));
+  const needle = $('s').value.trim().toLowerCase();
+  const shown = all.map((p, i) => ({ p, rank: i + 1 })).filter(x => !needle || x.p.name.toLowerCase().includes(needle));
+  if (!shown.length) { msg(needle ? 'No player found.' : 'No players yet.'); return; }
+  msg('');
+  for (const { p, rank } of shown) {
+    const r = el('div', 'row' + (rank <= 3 ? ' r' + rank : ''));
+    r.appendChild(el('div', 'rk', rank));
+    const nm = el('div', 'nm'); nm.appendChild(el('div', 'name', p.name));
+    if (p.tn) nm.appendChild(el('div', 'tier t' + (+p.tier || 1), p.tn));
+    r.appendChild(nm);
+    const mv = el('div', 'mv');
+    if (p[PK] == null || p[PK] <= 0) { mv.textContent = 'NEW'; mv.classList.add('new'); }
+    else if (p[PK] > rank) { mv.textContent = '▲' + (p[PK] - rank); mv.classList.add('up'); }
+    else if (p[PK] < rank) { mv.textContent = '▼' + (rank - p[PK]); mv.classList.add('down'); }
+    r.appendChild(mv);
+    r.appendChild(el('div', 'val', p[K]));
+    list.appendChild(r);
+  }
+}
+function bounty(){
+  const b = $('bounty'); b.textContent = '';
+  const d = data && data.bounty;
+  if (!d || !d.holder || d.claimedBy) { b.style.display = 'none'; return; }
+  b.style.display = 'block';
+  b.appendChild(el('b', null, 'Most Wanted'));
+  b.appendChild(el('span', null, d.holder));
+  b.appendChild(el('small', null, 'Beat them to win +' + d.rating + ' rating and +' + d.points + ' points'));
+}
+async function load(){
+  try {
+    const r = await fetch(SRC + (SRC.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    data = await r.json();
+    $('upd').textContent = data.updated ? 'Updated ' + new Date(data.updated).toLocaleString() : '';
+    msg(''); bounty(); render();
+  } catch (e) {
+    if (!data) { $('upd').textContent = ''; msg(location.protocol === 'file:' ? 'Open this page from a web host (browsers block loading the data from a local file).' : 'Could not load the leaderboard. Try again in a moment.'); }
+  }
+}
+$('tR').onclick = () => { KEY = 'rating'; $('tR').className = 'on'; $('tP').className = ''; render(); };
+$('tP').onclick = () => { KEY = 'points'; $('tP').className = 'on'; $('tR').className = ''; render(); };
+$('s').oninput = render;
+load(); setInterval(load, 60000);
+</script></body></html>
