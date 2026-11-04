@@ -101,7 +101,9 @@ async function load(){
     const r = await fetch(SRC + (SRC.includes('?') ? '&' : '?') + 't=' + Date.now(), { cache: 'no-store' });
     if (!r.ok) throw new Error(r.status);
     data = await r.json();
-    $('upd').textContent = data.updated ? 'Updated ' + new Date(data.updated).toLocaleString() : '';
+    // older exports may carry '.' instead of ':' in the time (Finnish number format): 2026-11-04T10.00.00Z
+    const t = data.updated ? new Date(String(data.updated).replace(/T(\d\d)\.(\d\d)\.(\d\d)/, 'T$1:$2:$3')) : null;
+    $('upd').textContent = t && !isNaN(t) ? 'Updated ' + t.toLocaleString() : '';
     msg(''); bounty(); render();
   } catch (e) {
     if (!data) { $('upd').textContent = ''; msg(location.protocol === 'file:' ? 'Open this page from a web host (browsers block loading the data from a local file).' : 'Could not load the leaderboard. Try again in a moment.'); }
